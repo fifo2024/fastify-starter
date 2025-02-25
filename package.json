@@ -1,0 +1,22 @@
+{
+    "name": "fastify-starter",
+    "version": "1.0.0",
+    "description": "fastify-starter",
+    "main": "index.js",
+    "scripts": {
+        "dev": "NODE_ENV=development bun run --hot src/index.ts",
+        "start": "NODE_ENV=production bun run --hot src/index.ts"
+    },
+    "author": "",
+    "packageManager": "pnpm@9.15.0",
+    "license": "ISC",
+    "dependencies": {
+        "@fastify/cors": "^10.0.2",
+        "dotenv": "^16.4.7",
+        "fastify": "^5.2.1",
+        "openai": "^4.85.2"
+    },
+    "devDependencies": {
+        "@types/node": "^22.13.4"
+    }
+}
