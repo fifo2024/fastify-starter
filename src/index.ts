@@ -17,7 +17,7 @@ const fastify: FastifyInstance = Fastify({ logger: true });
 fastify.register(cors, {
     origin: "*", // 允许所有域名访问
     methods: ["GET", "POST", "PUT", "DELETE"], // 允许的 HTTP 方法
-    allowedHeaders: ["Content-Type", "Authorization"], // 允许的请求头
+    allowedHeaders: ["Content-Type", "Authorization", "Message"], // 允许的请求头
     credentials: true, // 是否允许发送凭据（如 cookies）
 });
 
@@ -33,60 +33,40 @@ fastify.get("/", async (request: FastifyRequest, reply: FastifyReply) => {
     return { hello: process.env.OPENAI_BASE_URL };
 });
 
+// 定义一个 POST 路由，接收 JSON 数据
+fastify.post(
+    "/data",
+    {
+        schema: {
+            body: {
+                type: "object",
+                properties: {
+                    name: { type: "string" },
+                    age: { type: "number" },
+                },
+                required: ["name", "age"],
+            },
+        },
+    },
+    async (
+        request: FastifyRequest<{ Body: { name: string; age: number } }>,
+        reply: FastifyReply
+    ) => {
+        const data = request.body;
+        // 在这里可以对数据进行处理，比如保存到数据库
+        return { received: data };
+    }
+);
+
 // 内存缓存 存储大的system对象
 let messageCache: string = "";
-
-// 自定义 ReadableStream 源
-// class MyReadableStreamSource {
-//     constructor() {
-//         this.pulling = false;
-//         this.data = [1, 2, 3, 4, 5]; // 要发送的数据
-//         this.index = 0;
-//     }
-
-//     start(controller) {
-//         // 当有空间时，开始推送数据
-//         this.pulling = true;
-//         this._pushData(controller);
-//     }
-
-//     pull(controller) {
-//         // 当流被 pull 时，继续推送数据
-//         if (this.pulling) {
-//             this._pushData(controller);
-//         }
-//     }
-
-//     cancel() {
-//         // 清理逻辑
-//         console.log("Stream canceled");
-//     }
-
-//     _pushData(controller) {
-//         if (this.index < this.data.length) {
-//             controller.enqueue(this.data[this.index++]);
-//             // 如果没有更多数据要立即推送，停止 pulling
-//             if (this.index === this.data.length) {
-//                 this.pulling = false;
-//                 controller.close(); // 关闭流
-//             }
-//         }
-//     }
-// }
 
 fastify.get(
     "/api/deepseek",
     async (request: FastifyRequest, reply: FastifyReply) => {
         const headers = request.headers;
         const message: string = headers["message"]?.toString() ?? "[]";
-        const Message: any[] = [
-            {
-                role: "system",
-                content: "generate nba star name",
-            },
-        ]; // 获取 System 头
-        // const Message = JSON.parse(decodeURIComponent(message)); // 获取 System 头
-        console.log(11, message);
+        const Message = JSON.parse(decodeURIComponent(message)); // 获取 System 头
 
         const stream = new ReadableStream({
             async start(controller) {
@@ -151,10 +131,6 @@ fastify.get(
             },
         });
 
-        // 创建 ReadableStream 实例
-        // const stream = new ReadableStream(new MyReadableStreamSource());
-
-        // console.log(98, stream);
         reply.headers({
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache",
@@ -165,71 +141,54 @@ fastify.get(
                 "Content-Type, Authorization, System, Message",
         });
 
-        // 获取读取器
-        const reader = stream.getReader();
-
-        // 读取流数据
-        async function readStream() {
-            try {
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) {
-                        console.log("Stream reading complete");
-                        break;
-                    }
-                    console.log("Received:", value);
-                }
-            } catch (err) {
-                console.error("Error reading stream:", err);
-            } finally {
-                reader.releaseLock(); // 释放读取器锁（如果适用）
-            }
-        }
-
-        return readStream();
-
-        // let response = null;
-        // try {
-        //     const response = await openai.chat.completions.create({
-        //         model: "gpt-3.5-turbo", // 使用 ChatGPT 模型
-        //         messages: [
-        //             { role: "system", content: "你是一个有帮助的助手。" },
-        //             { role: "user", content: "你好，你是谁？" },
-        //         ],
-        //     });
-
-        //     // 输出助手回复
-        //     console.log(184, response);
-        // } catch (error) {
-        //     console.error("调用 OpenAI API 时出错:", error);
-        // }
-        // console.log(188, response);
-        // return response;
+        return stream;
     }
 );
 
 // 定义一个 POST 路由，接收 JSON 数据
 fastify.post(
-    "/data",
+    "/api/deepseek",
     {
         schema: {
             body: {
                 type: "object",
                 properties: {
-                    name: { type: "string" },
-                    age: { type: "number" },
+                    message: { type: "string" },
                 },
-                required: ["name", "age"],
+                required: ["message"],
             },
         },
     },
     async (
-        request: FastifyRequest<{ Body: { name: string; age: number } }>,
+        request: FastifyRequest<{ Body: { message: string } }>,
         reply: FastifyReply
     ) => {
-        const data = request.body;
+        const { message } = request.body;
+        // 存储数据
+        messageCache = message;
+
+        reply.headers({
+            "Access-Control-Allow-Origin": "*", // 允许所有来源
+        });
+
         // 在这里可以对数据进行处理，比如保存到数据库
-        return { received: data };
+        return { received: message };
+    }
+);
+
+fastify.options(
+    "/api/deepseek",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+        console.log(232, "options");
+        reply.headers({
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers":
+                "Content-Type, Authorization, System, Message",
+        });
+
+        // 在这里可以对数据进行处理，比如保存到数据库
+        return null;
     }
 );
 
