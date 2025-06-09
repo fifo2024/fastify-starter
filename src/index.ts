@@ -16,9 +16,12 @@ const fastify: FastifyInstance = Fastify({ logger: true });
 // 注册 CORS 插件
 fastify.register(cors, {
     origin: "*", // 允许所有域名访问
+    // origin: ["http://127.0.0.1:5173"],
     methods: ["GET", "POST", "PUT", "DELETE"], // 允许的 HTTP 方法
     allowedHeaders: ["Content-Type", "Authorization", "Message"], // 允许的请求头
+    exposedHeaders: ["X-Custom-Header"],
     credentials: true, // 是否允许发送凭据（如 cookies）
+    maxAge: 86400, // 预检请求缓存时间(秒)
 });
 
 const openai = new OpenAI({
@@ -180,6 +183,179 @@ fastify.options(
     "/api/deepseek",
     async (request: FastifyRequest, reply: FastifyReply) => {
         console.log(232, "options");
+        reply.headers({
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers":
+                "Content-Type, Authorization, System, Message",
+        });
+
+        // 在这里可以对数据进行处理，比如保存到数据库
+        return null;
+    }
+);
+
+fastify.get(
+    "/api/chat/completion",
+    async (
+        request: FastifyRequest<{ Body: { message: string } }>,
+        reply: FastifyReply
+    ) => {
+        console.log("/api/chat/completion", "get");
+        // 从请求体中获取数据（POST数据）
+        const { message, interval = 1000 } = { message: "hello" };
+
+        reply.headers({
+            "Access-Control-Allow-Origin": "http://127.0.0.1:5173", // 允许所有来源
+            "Access-Control-Allow-Methods": "GET",
+        });
+
+        // 发送初始数据
+        reply.raw.write(
+            `event: connected\ndata: ${JSON.stringify({
+                status: "connected",
+            })}\n\n`
+        );
+
+        // 设置 SSE 所需的响应头
+        reply.raw.writeHead(200, {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            Connection: "keep-alive",
+        });
+
+        // 确保连接保持打开
+        request.raw.on("close", () => {
+            console.log("Client disconnected");
+        });
+
+        // 发送初始数据
+        reply.raw.write(
+            `event: connected\ndata: ${JSON.stringify({
+                status: "connected",
+            })}\n\n`
+        );
+
+        // 模拟定期发送数据
+        let counter = 0;
+        const sendData = () => {
+            if (reply.raw.writableEnded) {
+                clearInterval(timer);
+                return;
+            }
+
+            counter++;
+            reply.raw.write(
+                `data: ${JSON.stringify({
+                    message: message || "Default message",
+                    count: counter,
+                    timestamp: new Date().toISOString(),
+                })}\n\n`
+            );
+
+            if (counter >= 10) {
+                reply.raw.write("event: end\ndata: Stream ended\n\n");
+                clearInterval(timer);
+                reply.raw.end();
+            }
+        };
+
+        const timer = setInterval(sendData, interval);
+
+        // 返回一个永远不会resolve的promise以保持连接
+        return new Promise(() => {});
+    }
+);
+
+fastify.post(
+    "/api/chat/completion",
+    {
+        schema: {
+            body: {
+                type: "object",
+                properties: {
+                    message: { type: "string" },
+                },
+                required: ["message"],
+            },
+        },
+    },
+    async (
+        request: FastifyRequest<{ Body: { message: string } }>,
+        reply: FastifyReply
+    ) => {
+        // 从请求体中获取数据（POST数据）
+        const { message, interval = 1000 } = request.body || {};
+        console.log(303, message);
+        // 从请求体中获取数据（POST数据）
+
+        reply.headers({
+            "Access-Control-Allow-Origin": "*", // 允许所有来源
+            "Access-Control-Allow-Methods": "GET",
+        });
+
+        // 发送初始数据
+        reply.raw.write(
+            `event: connected\ndata: ${JSON.stringify({
+                status: "connected",
+            })}\n\n`
+        );
+
+        // 设置 SSE 所需的响应头
+        reply.raw.writeHead(200, {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            Connection: "keep-alive",
+        });
+
+        // 确保连接保持打开
+        request.raw.on("close", () => {
+            console.log("Client disconnected");
+        });
+
+        // 发送初始数据
+        reply.raw.write(
+            `event: connected\ndata: ${JSON.stringify({
+                status: "connected",
+            })}\n\n`
+        );
+
+        // 模拟定期发送数据
+        let counter = 0;
+        const sendData = () => {
+            if (reply.raw.writableEnded) {
+                clearInterval(timer);
+                return;
+            }
+
+            counter++;
+            reply.raw.write(
+                `data: ${JSON.stringify({
+                    message: message || "Default message",
+                    count: counter,
+                    timestamp: new Date().toISOString(),
+                })}\n\n`
+            );
+
+            if (counter >= 10) {
+                reply.raw.write("event: end\ndata: Stream ended\n\n");
+                clearInterval(timer);
+                reply.raw.end();
+            }
+        };
+
+        const timer = setInterval(sendData, interval);
+
+        // 返回一个永远不会resolve的promise以保持连接
+        return new Promise(() => {});
+        // return { received: message + Math.random() };
+    }
+);
+
+fastify.options(
+    "/api/chat/completion",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+        console.log("", "options");
         reply.headers({
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
